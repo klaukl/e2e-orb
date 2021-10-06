@@ -108,7 +108,7 @@ commands:
             echo "EOF_URL2" >> $BASH_ENV
 
 jobs:
-  build:
+  test:
     <<: *defaults
     steps:
       - checkout
@@ -142,14 +142,9 @@ workflows:
     when:
       not: << pipeline.parameters.e2e >>
     jobs:
-      - build:
-          context:
-            - dockerhub-readonly
       - test:
           context:
             - dockerhub-readonly
-          requires:
-            - build
 
   nightwatch:
     when: << pipeline.parameters.e2e >>
