@@ -142,13 +142,6 @@ workflows:
     when:
       not: << pipeline.parameters.e2e >>
     jobs:
-      - test:
-          context:
-            - dockerhub-readonly
-
-  nightwatch:
-    when: << pipeline.parameters.e2e >>
-    jobs:
       - smoke:
           context:
             - e2e-test
