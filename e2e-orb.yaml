@@ -1,0 +1,139 @@
+version: 2.1
+parameters:
+  e2e:
+    type: boolean
+    default: false
+  e2e_be_url:
+    type: string
+    default: ''
+  e2e_fe_url:
+    type: string
+    default: ''
+  e2e_project:
+    type: string
+    default: ''
+
+executors:
+  e2e:
+    docker:
+    - image: sdptestautomation/e2e:sdp-1.x
+      auth:
+        username: $E2E_DOCKERHUB_USERNAME
+        password: $E2E_DOCKERHUB_PASSWORD
+    environment:
+      BE_BASE_URL: << pipeline.parameters.e2e_be_url >>
+      FE_BASE_URL: << pipeline.parameters.e2e_fe_url >>
+      PROJECT: << pipeline.parameters.e2e_project >>
+      TESTID: 'fixture'
+      BROWSERSTACK: ''
+    working_directory: /app
+
+orbs:
+  browser-tools: circleci/browser-tools@1.2.1
+  slack: circleci/slack@4.4.4
+  jq: circleci/jq@2.2.0
+
+commands:
+  run_e2e:
+    description: "Run e2e tests"
+    parameters:
+      tags:
+        type: string
+        default: ""
+    steps:
+      - browser-tools/install-chrome
+      - run:
+          name: Check browsers
+          command: |
+            node --version
+            google-chrome --version
+      - run:
+          name: Check test environment urls
+          command: |
+            echo $BE_BASE_URL
+            echo $FE_BASE_URL
+      - run:
+          name: "Wait up servers in case they are idle"
+          command: |
+            curl ${BE_BASE_URL} --max-time 1000;
+            curl ${FE_BASE_URL} --max-time 1000;
+      - restore_cache:
+          keys:
+            - v1-e2e-deps-{{ checksum "package-lock.json" }}
+            - v1-e2e-deps-{{ .Branch }}
+            - v1-e2e-deps
+      - run:
+          name: install node modules
+          command: npm ci
+      - save_cache:
+          key: v1-e2e-deps-{{ checksum "package-lock.json" }}
+          paths:
+            - node_modules
+      - run:
+          name: prepare the test fixture in backend
+          command: NIGHTWATCH_ENV=chrome_headless npm run cucumber:backend -- -- --tags "<< parameters.tags >>"
+      - run:
+          name: run e2e test
+          command: NIGHTWATCH_ENV=chrome_headless npm run cucumber:frontend -- -- --tags "<< parameters.tags >>"
+      - store_test_results:
+          path: report
+      - store_artifacts:
+          path: report
+      - run:
+          name: Get artifacts
+          when: always
+          command: |
+            artifacts=$(curl -X GET "https://circleci.com/api/v2/project/github/dpc-sdp/vic-gov-au/$CIRCLE_BUILD_NUM/artifacts" \
+            -H "Accept: application/json" \
+            -u "$CIRCLE_TOKEN:")
+            htmlreports=$(jq '.items[] | select(.url | contains("html"))' \<<< "$artifacts")
+            REPORTS=$(jq -s '.' \<<< $htmlreports)
+            BE_REPORTURL=$(jq --raw-output '.[0].url' \<<< $REPORTS)
+            FE_REPORTURL=$(jq --raw-output 'if .[1].url == null then "No report found" else .[1].url end' \<<< $REPORTS)
+            echo 'export BE_REPORTURL="${URL1}"' >> $BASH_ENV
+            echo 'export FE_REPORTURL="${URL2}"' >> $BASH_ENV
+            echo "read -r -d '' BE_REPORTURL \<< 'EOF_URL1'" >> $BASH_ENV
+            echo "$BE_REPORTURL" >> $BASH_ENV
+            echo "EOF_URL1" >> $BASH_ENV
+            echo "read -r -d '' FE_REPORTURL \<< 'EOF_URL2'" >> $BASH_ENV
+            echo "$FE_REPORTURL" >> $BASH_ENV
+            echo "EOF_URL2" >> $BASH_ENV
+
+jobs:
+ # This test just checks that we can communicate with the backend and we can render a basic page
+  smoke:
+    executor: e2e
+    steps:
+      - run_e2e:
+          tags: "(@smoke and @core) or (@smoke and @<< pipeline.parameters.e2e_project >>)"
+  
+  e2e:
+    executor: e2e
+    steps:
+      - run_e2e:
+          tags: "(@core or @<< pipeline.parameters.e2e_project >>) and not @mobile"
+      - slack/notify:
+          channel: sdp-test-report
+          event: pass
+          template: SLACK_PASS_TEMPLATE
+      - slack/notify:
+          channel: sdp-test-report
+          event: fail
+          template: SLACK_FAIL_TEMPLATE
+workflows:
+  version: 2
+  nightwatch:
+    when: << pipeline.parameters.e2e >>
+    jobs:
+      - smoke:
+          context:
+            - e2e-test
+      - e2e:
+          filters:
+            branches:
+              only:
+                - /^release\/.*/
+          requires:
+            - smoke
+          context:
+            - e2e-test

@@ -39,6 +39,7 @@ orbs:
   browser-tools: circleci/browser-tools@1.2.1
   slack: circleci/slack@4.4.4
   jq: circleci/jq@2.2.0
+  sdp-e2e: klsdp/e2e@1.0.0
 
 commands:
   run_e2e:
