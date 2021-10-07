@@ -124,6 +124,16 @@ jobs:
             e2e_project:
                 default: ""
                 type: string
+            e2e_be_url:
+                default: ""
+                description: |
+                    manual process
+                type: string
+            e2e_fe_url:
+                default: ""
+                description: |
+                    manual process
+                type: string
     steps:
       - run_e2e:
           tags: "(@smoke and @core) or (@smoke and @<< parameters.e2e_project >>)"
