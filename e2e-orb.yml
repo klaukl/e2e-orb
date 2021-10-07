@@ -1,17 +1,17 @@
 version: 2.1
-parameters:
-  e2e:
-    type: boolean
-    default: false
-  e2e_be_url:
-    type: string
-    default: ''
-  e2e_fe_url:
-    type: string
-    default: ''
-  e2e_project:
-    type: string
-    default: ''
+# parameters:
+#   e2e:
+#     type: boolean
+#     default: false
+#   e2e_be_url:
+#     type: string
+#     default: ''
+#   e2e_fe_url:
+#     type: string
+#     default: ''
+#   e2e_project:
+#     type: string
+#     default: ''
 
 executors:
   e2e:
@@ -21,12 +21,28 @@ executors:
         username: $E2E_DOCKERHUB_USERNAME
         password: $E2E_DOCKERHUB_PASSWORD
     environment:
-      BE_BASE_URL: << pipeline.parameters.e2e_be_url >>
-      FE_BASE_URL: << pipeline.parameters.e2e_fe_url >>
-      PROJECT: << pipeline.parameters.e2e_project >>
+      BE_BASE_URL: << parameters.e2e_be_url >>
+      FE_BASE_URL: << parameters.e2e  _fe_url >>
+      PROJECT: << parameters.e2e_project >>
       TESTID: 'fixture'
       BROWSERSTACK: ''
     working_directory: /app
+    parameters:
+            e2e_be_url:
+                default: ""
+                description: |
+                    manual process
+                type: string
+            e2e_fe_url:
+                default: ""
+                description: |
+                    manual process
+                type: string
+            e2e_project:
+                default: ""
+                description: |
+                    manual process
+                type: string
 
 orbs:
   browser-tools: circleci/browser-tools@1.2.1
@@ -102,16 +118,25 @@ commands:
 jobs:
  # This test just checks that we can communicate with the backend and we can render a basic page
   smoke:
+
     executor: e2e
+    parameters:
+            e2e_project:
+                default: ""
+                type: string
     steps:
       - run_e2e:
-          tags: "(@smoke and @core) or (@smoke and @<< pipeline.parameters.e2e_project >>)"
+          tags: "(@smoke and @core) or (@smoke and @<< parameters.e2e_project >>)"
   
   e2e:
     executor: e2e
+    parameters:
+            e2e_project:
+                default: ""
+                type: string
     steps:
       - run_e2e:
-          tags: "(@core or @<< pipeline.parameters.e2e_project >>) and not @mobile"
+          tags: "(@core or @<< parameters.e2e_project >>) and not @mobile"
       - slack/notify:
           channel: sdp-test-report
           event: pass
@@ -123,7 +148,7 @@ jobs:
 workflows:
   version: 2
   nightwatch:
-    when: << pipeline.parameters.e2e >>
+    when: << parameters.e2e >>
     jobs:
       - smoke:
           context:
