@@ -22,7 +22,7 @@ executors:
         password: $E2E_DOCKERHUB_PASSWORD
     environment:
       BE_BASE_URL: << parameters.e2e_be_url >>
-      FE_BASE_URL: << parameters.e2e  _fe_url >>
+      FE_BASE_URL: << parameters.e2e_fe_url >>
       PROJECT: << parameters.e2e_project >>
       TESTID: 'fixture'
       BROWSERSTACK: ''
