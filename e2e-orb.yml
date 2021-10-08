@@ -1,18 +1,4 @@
 version: 2.1
-# parameters:
-#   e2e:
-#     type: boolean
-#     default: false
-#   e2e_be_url:
-#     type: string
-#     default: ''
-#   e2e_fe_url:
-#     type: string
-#     default: ''
-#   e2e_project:
-#     type: string
-#     default: ''
-
 executors:
   e2e:
     docker:
@@ -21,28 +7,9 @@ executors:
         username: $E2E_DOCKERHUB_USERNAME
         password: $E2E_DOCKERHUB_PASSWORD
     environment:
-      BE_BASE_URL: << parameters.e2e_be_url >>
-      FE_BASE_URL: << parameters.e2e_fe_url >>
-      PROJECT: << parameters.e2e_project >>
       TESTID: 'fixture'
       BROWSERSTACK: ''
     working_directory: /app
-    parameters:
-            e2e_be_url:
-                default: ""
-                description: |
-                    manual process
-                type: string
-            e2e_fe_url:
-                default: ""
-                description: |
-                    manual process
-                type: string
-            e2e_project:
-                default: ""
-                description: |
-                    manual process
-                type: string
 
 orbs:
   browser-tools: circleci/browser-tools@1.2.1
@@ -56,6 +23,15 @@ commands:
       tags:
         type: string
         default: ""
+      be_url:
+        type: string
+        default: ""
+      fe_url:
+        type: string
+        default: ""
+      project:
+        type: string
+        default: ""
     steps:
       - browser-tools/install-chrome
       - run:
@@ -63,6 +39,12 @@ commands:
           command: |
             node --version
             google-chrome --version
+      - run:
+          name: Set up Environment URLs
+          command: |
+              echo 'export BE_BASE_URL="<< parameters.be_url >>"' >> $BASH_ENV
+              echo 'export FE_BASE_URL="<< parameters.fe_url >>"' >> $BASH_ENV
+              echo 'export PROJECT="<< parameters.project >>"' >> $BASH_ENV
       - run:
           name: Check test environment urls
           command: |
@@ -99,7 +81,7 @@ commands:
           name: Get artifacts
           when: always
           command: |
-            artifacts=$(curl -X GET "https://circleci.com/api/v2/project/github/dpc-sdp/vic-gov-au/$CIRCLE_BUILD_NUM/artifacts" \
+            artifacts=$(curl -X GET "https://circleci.com/api/v2/project/github/dpc-sdp/$CIRCLE_PROJECT_REPONAME/$CIRCLE_BUILD_NUM/artifacts" \
             -H "Accept: application/json" \
             -u "$CIRCLE_TOKEN:")
             htmlreports=$(jq '.items[] | select(.url | contains("html"))' \<<< "$artifacts")
@@ -118,35 +100,41 @@ commands:
 jobs:
  # This test just checks that we can communicate with the backend and we can render a basic page
   smoke:
-
     executor: e2e
     parameters:
-            e2e_project:
-                default: ""
-                type: string
-            e2e_be_url:
-                default: ""
-                description: |
-                    manual process
-                type: string
-            e2e_fe_url:
-                default: ""
-                description: |
-                    manual process
-                type: string
+      project:
+        default: ""
+        type: string
+      be_url:
+        default: ""
+        type: string
+      fe_url:
+        default: ""
+        type: string
     steps:
       - run_e2e:
-          tags: "(@smoke and @core) or (@smoke and @<< parameters.e2e_project >>)"
-  
+          tags: "(@smoke and @core) or (@smoke and @<< parameters.project >>)"
+          project: << parameters.project >>
+          be_url: << parameters.be_url >>
+          fe_url: << parameters.fe_url >>
   e2e:
     executor: e2e
     parameters:
-            e2e_project:
-                default: ""
-                type: string
+      project:
+        default: ""
+        type: string
+      be_url:
+        default: ""
+        type: string
+      fe_url:
+        default: ""
+        type: string
     steps:
       - run_e2e:
-          tags: "(@core or @<< parameters.e2e_project >>) and not @mobile"
+          tags: "(@core or @<< parameters.project >>) and not @mobile"
+          project: << parameters.project >>
+          be_url: << parameters.be_url >>
+          fe_url: << parameters.fe_url >>
       - slack/notify:
           channel: sdp-test-report
           event: pass
@@ -155,20 +143,3 @@ jobs:
           channel: sdp-test-report
           event: fail
           template: SLACK_FAIL_TEMPLATE
-workflows:
-  version: 2
-  nightwatch:
-    when: << parameters.e2e >>
-    jobs:
-      - smoke:
-          context:
-            - e2e-test
-      - e2e:
-          filters:
-            branches:
-              only:
-                - /^release\/.*/
-          requires:
-            - smoke
-          context:
-            - e2e-test
